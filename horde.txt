@@ -1,8 +1,8 @@
 "horde"
 {
 	"base"		"sandbox"
-	"title"		"Horde: Rewritten"
-	"maps"		"hr"
+	"title"		"Horde: REDUX"
+	"maps"		"hr_|hrr_"
 	"menusystem"	"1"
 	"category"	"pve"
 	
