@@ -1,6 +1,71 @@
 local plymeta = FindMetaTable("Player")
 local entmeta = FindMetaTable("Entity")
 
+-- ─────────────────────────────────────────────────────────────
+-- Armor bonus dispatch table: armor_name -> function(bonus, dmg)
+-- Replaces a long elseif chain that ran on every hit.
+-- ─────────────────────────────────────────────────────────────
+HORDE.ARMOR_BONUS_HANDLERS = {
+    ["armor_assault"]    = function(bonus, dmg)
+        if HORDE:IsBallisticDamage(dmg) then bonus.resistance = bonus.resistance + 0.08 end
+    end,
+    ["armor_heavy"]      = function(bonus, dmg) end, -- no bonus
+    ["armor_medic"]      = function(bonus, dmg)
+        if HORDE:IsPoisonDamage(dmg) then bonus.resistance = bonus.resistance + 0.08 end
+    end,
+    ["armor_demolition"] = function(bonus, dmg)
+        if HORDE:IsBlastDamage(dmg) then bonus.resistance = bonus.resistance + 0.08 end
+    end,
+    ["armor_ghost"]      = function(bonus, dmg)
+        bonus.evasion = bonus.evasion + 0.05
+    end,
+    ["armor_engineer"]   = function(bonus, dmg)
+        bonus.resistance = bonus.resistance + 0.05
+    end,
+    ["armor_warden"]     = function(bonus, dmg)
+        if HORDE:IsLightningDamage(dmg) then bonus.resistance = bonus.resistance + 0.08 end
+    end,
+    ["armor_cremator"]   = function(bonus, dmg)
+        if HORDE:IsFireDamage(dmg) then bonus.resistance = bonus.resistance + 0.08 end
+    end,
+    ["armor_berserker"]  = function(bonus, dmg)
+        local t = dmg:GetDamageType()
+        if t == DMG_SLASH or t == DMG_CLUB then bonus.resistance = bonus.resistance + 0.08 end
+    end,
+    ["armor_survivor"]   = function(bonus, dmg)
+        bonus.resistance = bonus.resistance + 0.05
+    end,
+}
+
+-- ─────────────────────────────────────────────────────────────
+-- Damage type -> debuff status mapping table.
+-- Returns (debuff, multiplier) or (nil, nil) if no match.
+-- Built lazily since HORDE.Status_* constants are defined
+-- in sh_status.lua which loads before this file.
+-- ─────────────────────────────────────────────────────────────
+local DAMAGE_TYPE_DEBUFF_MAP = nil
+local function BuildDamageDebuffMap()
+    DAMAGE_TYPE_DEBUFF_MAP = {
+        { check = function(d) return HORDE:IsPoisonDamage(d) end,      status = HORDE.Status_Break,     more = 2 },
+        { check = function(d) return HORDE:IsFireDamage(d) end,        status = HORDE.Status_Ignite,    more = 2 },
+        { check = function(d) return HORDE:IsLightningDamage(d) end,   status = HORDE.Status_Shock,     more = 2 },
+        { check = function(d) return HORDE:IsColdDamage(d) end,        status = HORDE.Status_Frostbite, more = 2 },
+        { check = function(d) return d:IsDamageType(DMG_DISSOLVE) end, status = HORDE.Status_Necrosis,  more = 2 },
+    }
+end
+
+-- Helper: returns the debuff and buildup multiplier for the given dmginfo.
+function HORDE:GetDamageTypeDebuff(dmginfo)
+    if not DAMAGE_TYPE_DEBUFF_MAP then BuildDamageDebuffMap() end
+    for _, entry in ipairs(DAMAGE_TYPE_DEBUFF_MAP) do
+        if entry.check(dmginfo) then
+            return entry.status, entry.more
+        end
+    end
+    return nil, nil
+end
+
+
 HORDE.DMG_CALCULATED = 1
 HORDE.DMG_OVER_TIME = 3
 HORDE.DMG_SPLASH = 2
@@ -274,40 +339,8 @@ hook.Add("EntityTakeDamage", "Horde_ApplyDamageTaken", function(target, dmg)
     if bonus.resistance >= 1.0 then return true end
 
     if ply.Horde_Special_Armor then
-        local armor = ply.Horde_Special_Armor
-        local dmgtype = dmg:GetDamageType()
-        if armor == "armor_assault" then
-            if HORDE:IsBallisticDamage(dmg) then
-                bonus.resistance = bonus.resistance + 0.08
-            end
-        elseif armor == "armor_heavy" then
-        elseif armor == "armor_medic" then
-            if HORDE:IsPoisonDamage(dmg) then
-                bonus.resistance = bonus.resistance + 0.08
-            end
-        elseif armor == "armor_demolition" then
-            if HORDE:IsBlastDamage(dmg) then
-                bonus.resistance = bonus.resistance + 0.08
-            end
-        elseif armor == "armor_ghost" then
-            bonus.evasion = bonus.evasion + 0.05
-        elseif armor == "armor_engineer" then
-            bonus.resistance = bonus.resistance + 0.05
-        elseif armor == "armor_warden" then
-            if HORDE:IsLightningDamage(dmg) then
-                bonus.resistance = bonus.resistance + 0.08
-            end
-        elseif armor == "armor_cremator" then
-            if HORDE:IsFireDamage(dmg) then
-                bonus.resistance = bonus.resistance + 0.08
-            end
-        elseif armor == "armor_berserker" then
-            if dmgtype == DMG_SLASH or dmgtype == DMG_CLUB then
-                bonus.resistance = bonus.resistance + 0.08
-            end
-        elseif armor == "armor_survivor" then
-            bonus.resistance = bonus.resistance + 0.05
-        end
+        local handler = HORDE.ARMOR_BONUS_HANDLERS[ply.Horde_Special_Armor]
+        if handler then handler(bonus, dmg) end
     end
 
     dmg:ScaleDamage(bonus.less * (1 - bonus.resistance))
@@ -317,33 +350,19 @@ hook.Add("EntityTakeDamage", "Horde_ApplyDamageTaken", function(target, dmg)
 
     hook.Run("Horde_OnPlayerDamageTakenPost", ply, dmg, bonus)
 
-    local more = 1
-    local debuff = nil
     if dmg:GetDamage() > 0 then
-        if HORDE:IsPoisonDamage(dmg) then
-            debuff = HORDE.Status_Break
-            more = 2
-        elseif HORDE:IsFireDamage(dmg) then
-            debuff = HORDE.Status_Ignite
-            more = 2
-        elseif HORDE:IsLightningDamage(dmg) then
-            debuff = HORDE.Status_Shock
-            more = 2
-        elseif HORDE:IsColdDamage(dmg) then
-            debuff = HORDE.Status_Frostbite
-            more = 2
+        local debuff, more = HORDE:GetDamageTypeDebuff(dmg)
+        if not debuff then return end
+
+        -- Cold effect on player
+        if debuff == HORDE.Status_Frostbite then
             local effectdata = EffectData()
             effectdata:SetOrigin(ply:GetPos() + ply:GetUp() * 50)
             effectdata:SetScale(10)
             effectdata:SetMagnitude(10)
             util.Effect("GlassImpact", effectdata, true, true)
             util.Effect("GlassImpact", effectdata, true, true)
-        elseif dmg:IsDamageType(DMG_DISSOLVE) then
-            debuff = HORDE.Status_Necrosis
-            more = 2
         end
-
-        if not debuff then return end
 
         local buildup = dmg:GetDamage() * more
         local class = dmg:GetAttacker():GetClass()
@@ -369,21 +388,14 @@ hook.Add("EntityTakeDamage", "Horde_ApplyMinionDamageTaken", function(target, dm
         dmg:ScaleDamage(2.5)
     end
     ]]
-    local debuff = nil
     local bonus = { more = 1 }
     if dmg:GetDamage() > 0 then
-        if HORDE:IsPoisonDamage(dmg) then
-            debuff = HORDE.Status_Break
-            bonus.more = 2
-        elseif HORDE:IsFireDamage(dmg) then
-            debuff = HORDE.Status_Ignite
-            bonus.more = 2
-        elseif HORDE:IsLightningDamage(dmg) then
-            debuff = HORDE.Status_Shock
-            bonus.more = 2
-        elseif HORDE:IsColdDamage(dmg) then
-            debuff = HORDE.Status_Frostbite
-            bonus.more = 2
+        local debuff, more = HORDE:GetDamageTypeDebuff(dmg)
+        if not debuff then return end
+        bonus.more = more
+
+        -- Cold effect on minion
+        if debuff == HORDE.Status_Frostbite then
             local effectdata = EffectData()
             effectdata:SetOrigin(target:GetPos() + target:GetUp() * 50)
             effectdata:SetScale(10)
@@ -391,8 +403,6 @@ hook.Add("EntityTakeDamage", "Horde_ApplyMinionDamageTaken", function(target, dm
             util.Effect("GlassImpact", effectdata, true, true)
             util.Effect("GlassImpact", effectdata, true, true)
         end
-
-        if not debuff then return end
 
         local buildup = dmg:GetDamage() * bonus.more
         local class = dmg:GetAttacker():GetClass()

@@ -116,25 +116,28 @@ function HORDE:GetExpToNextLevel(level)
     return math.floor(50 + 2 * math.pow(1.1, level) + level * 25 + 100 * math.floor(level / 5))
 end
 
+-- Rank threshold table: { minimum level for this rank, rank }
+-- Order matters: we iterate from lowest to highest to find the correct rank.
+local RANK_THRESHOLDS = {
+    {  5, HORDE.Rank_Amateur       },
+    { 10, HORDE.Rank_Skilled       },
+    { 15, HORDE.Rank_Professional  },
+    { 20, HORDE.Rank_Expert        },
+    { 25, HORDE.Rank_Champion      },
+}
+
 function HORDE:LevelToRank(level)
-    if level < 30 then
-        local rank = HORDE.Rank_Novice
-        if level < 5 then
-        elseif level < 10 then
-            rank = HORDE.Rank_Amateur
-        elseif level < 15 then
-            rank = HORDE.Rank_Skilled
-        elseif level < 20 then
-            rank = HORDE.Rank_Professional
-        elseif level < 25 then
-            rank = HORDE.Rank_Expert
-        elseif level < 30 then
-            rank = HORDE.Rank_Champion
-        end
-        return rank, level % 5
-    else
+    if level >= 30 then
         return HORDE.Rank_Master, level - 30
     end
+
+    local rank = HORDE.Rank_Novice
+    for _, entry in ipairs(RANK_THRESHOLDS) do
+        if level < entry[1] then break end
+        rank = entry[2]
+    end
+
+    return rank, level % 5
 end
 
 if CLIENT then

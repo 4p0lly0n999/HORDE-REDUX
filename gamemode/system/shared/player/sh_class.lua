@@ -1,37 +1,65 @@
 -- Class
 HORDE.classes = {}
 HORDE.order_to_class_name = {}
-HORDE.Class_Survivor = "Survivor"
-HORDE.Class_Assault = "Assault"
-HORDE.Class_Heavy = "Heavy"
-HORDE.Class_Medic = "Medic"
-HORDE.Class_Demolition = "Demolition"
-HORDE.Class_Ghost = "Ghost"
-HORDE.Class_Engineer = "Engineer"
-HORDE.Class_Berserker = "Berserker"
-HORDE.Class_Warden = "Warden"
-HORDE.Class_Cremator = "Cremator"
+HORDE.Class_Survivor    = "Survivor"
+HORDE.Class_Assault     = "Assault"
+HORDE.Class_Heavy       = "Heavy"
+HORDE.Class_Medic       = "Medic"
+HORDE.Class_Demolition  = "Demolition"
+HORDE.Class_Ghost       = "Ghost"
+HORDE.Class_Engineer    = "Engineer"
+HORDE.Class_Berserker   = "Berserker"
+HORDE.Class_Warden      = "Warden"
+HORDE.Class_Cremator    = "Cremator"
 
--- Creates a Horde class
-function HORDE:CreateClass(name, extra_description, max_hp, movespd, sprintspd, base_perk, perks, order, display_name, model, icon, subclasses)
-    if name == nil or name == "" then return end
+-- ─────────────────────────────────────────────────────────────
+-- HORDE:CreateClass(data)
+--
+-- Creates a player class. Accepts a named-field table
+-- instead of a long positional argument list.
+--
+-- Required fields:
+--   name        (string)  — internal class name (HORDE.Class_*)
+--   order       (number)  — sort order index
+--   base_perk   (string)  — base perk for the class
+--   perks       (table)   — perk tier table:
+--                           { [1] = {title="...", choices={...}}, ... }
+--
+-- Optional fields:
+--   description (string)  — class description text
+--   max_hp      (number)  — maximum HP (default 100)
+--   movespd     (number)  — walk speed
+--   sprintspd   (number)  — sprint speed
+--   display_name(string)  — display name (defaults to name)
+--   model       (string)  — player model path
+--   icon        (string)  — icon filename (default "<n>.png")
+--   subclasses  (table)   — list of subclasses (default { name })
+-- ─────────────────────────────────────────────────────────────
+function HORDE:CreateClass(data)
+    if not data or not data.name or data.name == "" then return end
+
     local class = {}
-    class.name = name
-    class.extra_description = extra_description
-    class.max_hp = max_hp
-    class.movespd = movespd
-    class.sprintspd = sprintspd
-    class.base_perk = base_perk
-    class.perks = perks
-    class.order = order
-    class.display_name = display_name or name
-    class.model = model or nil
-    class.icon = icon or (class.name .. ".png")
-    class.infusions = infusions or {}
-    class.subclasses = subclasses or {}
+    class.name          = data.name
+    class.extra_description = data.description or data.extra_description or ""
+    class.max_hp        = data.max_hp    or 100
+    class.movespd       = data.movespd   or GetConVar("horde_base_walkspeed"):GetInt()
+    class.sprintspd     = data.sprintspd or GetConVar("horde_base_runspeed"):GetInt()
+    class.base_perk     = data.base_perk
+    class.perks         = data.perks     or {}
+    class.order         = data.order     or 0
+    class.display_name  = data.display_name or data.name
+    class.model         = data.model     or nil
+    class.icon          = data.icon      or (data.name .. ".png")
+    class.infusions     = data.infusions or {}
+    class.subclasses    = data.subclasses or { data.name }
+
     HORDE.order_to_class_name[class.order] = class.name
     HORDE.classes[class.name] = class
 end
+
+-- Alias — recommended way for external addons
+HORDE.RegisterClass = HORDE.CreateClass
+
 -- Only allow 1 change per wave
 HORDE.player_class_changed = {}
 
@@ -59,7 +87,7 @@ end
 local function GetClassData()
     if SERVER then
         if not file.IsDir("horde", "DATA") then
-            file.CreateDir("horde")
+            file.CreateDir("horde", "DATA")
             return
         end
 
@@ -90,176 +118,152 @@ local function GetClassData()
     end
 end
 
+-- ─────────────────────────────────────────────────────────────
+-- Default class definitions.
+-- Uses the new named-field CreateClass format.
+-- Walk/sprint speeds are taken from ConVars automatically
+-- (movespd/sprintspd fields can be omitted — defaults will apply).
+-- ─────────────────────────────────────────────────────────────
 function HORDE:GetDefaultClassesData()
-    HORDE:CreateClass(
-        HORDE.Class_Survivor,
-        "Has access to all weapons except for exclusive and special weapons.\n\nLimited access to attachments.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "survivor_base",
-        {
-            [1] = {title = "Survival", choices = {"medic_antibiotics", "assault_charge"}},
-            [2] = {title = "Improvise", choices = {"berserker_breathing_technique", "demolition_frag_cluster"}},
-            [3] = {title = "Imprinting", choices = {"heavy_liquid_armor", "cremator_entropy_shield"}},
-            [4] = {title = "Inspired Learning", choices = {"ghost_headhunter", "specops_flare"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Survivor,
+        description = "Has access to all weapons except for exclusive and special weapons.\n\nLimited access to attachments.",
+        base_perk   = "survivor_base",
+        perks = {
+            [1] = { title = "Survival",        choices = { "medic_antibiotics",    "assault_charge"          } },
+            [2] = { title = "Improvise",        choices = { "berserker_breathing_technique", "demolition_frag_cluster" } },
+            [3] = { title = "Imprinting",       choices = { "heavy_liquid_armor",   "cremator_entropy_shield" } },
+            [4] = { title = "Inspired Learning",choices = { "ghost_headhunter",     "specops_flare"           } },
         },
-        0,nil,nil,nil,
-        {HORDE.Class_Survivor}
-    )
+        order       = 0,
+        subclasses  = { HORDE.Class_Survivor },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Assault,
-        "Has full access to assault rifles.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "assault_base",
-        {
-            [1] = {title = "Maneuverability", choices = {"assault_ambush", "assault_charge"}},
-            [2] = {title = "Adaptability", choices = {"assault_drain", "assault_overclock"}},
-            [3] = {title = "Aggression", choices = {"assault_cardiac_resonance", "assault_cardiac_overload"}},
-            [4] = {title = "Conditioning", choices = {"assault_heightened_reflex", "assault_merciless_assault"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Assault,
+        description = "Has full access to assault rifles.",
+        base_perk   = "assault_base",
+        perks = {
+            [1] = { title = "Maneuverability", choices = { "assault_ambush",             "assault_charge"            } },
+            [2] = { title = "Adaptability",    choices = { "assault_drain",              "assault_overclock"         } },
+            [3] = { title = "Aggression",      choices = { "assault_cardiac_resonance",  "assault_cardiac_overload"  } },
+            [4] = { title = "Conditioning",    choices = { "assault_heightened_reflex",  "assault_merciless_assault" } },
         },
-        1,nil,nil,nil,
-        {HORDE.Class_Assault}
-    )
+        order       = 1,
+        subclasses  = { HORDE.Class_Assault },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Heavy,
-        "Has full access to machine guns and high weight weapons.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "heavy_base",
-        {
-            [1] = {title = "Suppression", choices = {"heavy_sticky_compound", "heavy_crude_casing"}},
-            [2] = {title = "Backup", choices = {"heavy_repair_catalyst", "heavy_floating_carrier"}},
-            [3] = {title = "Armor Protection", choices = {"heavy_liquid_armor", "heavy_reactive_armor"}},
-            [4] = {title = "Technology", choices = {"heavy_nanomachine", "heavy_ballistic_shock"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Heavy,
+        description = "Has full access to machine guns and high weight weapons.",
+        base_perk   = "heavy_base",
+        perks = {
+            [1] = { title = "Suppression",      choices = { "heavy_sticky_compound",  "heavy_crude_casing"     } },
+            [2] = { title = "Backup",            choices = { "heavy_repair_catalyst",  "heavy_floating_carrier" } },
+            [3] = { title = "Armor Protection",  choices = { "heavy_liquid_armor",     "heavy_reactive_armor"   } },
+            [4] = { title = "Technology",        choices = { "heavy_nanomachine",      "heavy_ballistic_shock"  } },
         },
-        2,nil,nil,nil,
-        {HORDE.Class_Heavy}
-    )
+        order       = 2,
+        subclasses  = { HORDE.Class_Heavy },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Medic,
-        "Has acesss to most light weapons and medical tools.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "medic_base",
-        {
-            [1] = {title = "Medicine", choices = {"medic_antibiotics", "medic_painkillers"}},
-            [2] = {title = "Bio-Engineering", choices = {"medic_berserk", "medic_fortify"}},
-            [3] = {title = "Enhancement", choices = {"medic_purify", "medic_haste"}},
-            [4] = {title = "Natural Selection", choices = {"medic_cellular_implosion", "medic_xcele"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Medic,
+        description = "Has acesss to most light weapons and medical tools.",
+        base_perk   = "medic_base",
+        perks = {
+            [1] = { title = "Medicine",         choices = { "medic_antibiotics",       "medic_painkillers"       } },
+            [2] = { title = "Bio-Engineering",  choices = { "medic_berserk",           "medic_fortify"           } },
+            [3] = { title = "Enhancement",      choices = { "medic_purify",            "medic_haste"             } },
+            [4] = { title = "Natural Selection",choices = { "medic_cellular_implosion", "medic_xcele"            } },
         },
-        3,nil,nil,nil,
-        {HORDE.Class_Medic}
-    )
+        order       = 3,
+        subclasses  = { HORDE.Class_Medic },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Demolition,
-        "Has full access to explosive weapons.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "demolition_base",
-        {
-            [1] = {title = "Grenade", choices = {"demolition_frag_impact", "demolition_frag_cluster"}},
-            [2] = {title = "Weaponry", choices = {"demolition_direct_hit", "demolition_seismic_wave"}},
-            [3] = {title = "Approach", choices = {"demolition_fragmentation", "demolition_knockout"}},
-            [4] = {title = "Destruction", choices = {"demolition_chain_reaction", "demolition_pressurized_warhead"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Demolition,
+        description = "Has full access to explosive weapons.",
+        base_perk   = "demolition_base",
+        perks = {
+            [1] = { title = "Grenade",    choices = { "demolition_frag_impact",        "demolition_frag_cluster"        } },
+            [2] = { title = "Weaponry",   choices = { "demolition_direct_hit",         "demolition_seismic_wave"        } },
+            [3] = { title = "Approach",   choices = { "demolition_fragmentation",      "demolition_knockout"            } },
+            [4] = { title = "Destruction",choices = { "demolition_chain_reaction",     "demolition_pressurized_warhead" } },
         },
-        4,nil,nil,nil,
-        {HORDE.Class_Demolition}
-    )
+        order       = 4,
+        subclasses  = { HORDE.Class_Demolition },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Ghost,
-        "Has access to sniper rifles and selected light weapons.\n\nHave access to suppressors and sniper scopes.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "ghost_base",
-        {
-            [1] = {title = "Tactics", choices = {"ghost_headhunter", "ghost_sniper"}},
-            [2] = {title = "Reposition", choices = {"ghost_phase_walk", "ghost_ghost_veil"}},
-            [3] = {title = "Trajectory", choices = {"ghost_brain_snap", "ghost_kinetic_impact"}},
-            [4] = {title = "Disposal", choices = {"ghost_coup", "ghost_decapitate"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Ghost,
+        description = "Has access to sniper rifles and selected light weapons.\n\nHave access to suppressors and sniper scopes.",
+        base_perk   = "ghost_base",
+        perks = {
+            [1] = { title = "Tactics",    choices = { "ghost_headhunter",    "ghost_sniper"         } },
+            [2] = { title = "Reposition", choices = { "ghost_phase_walk",    "ghost_ghost_veil"     } },
+            [3] = { title = "Trajectory", choices = { "ghost_brain_snap",    "ghost_kinetic_impact" } },
+            [4] = { title = "Disposal",   choices = { "ghost_coup",          "ghost_decapitate"     } },
         },
-        5,nil,nil,nil,
-        {HORDE.Class_Ghost}
-    )
+        order       = 5,
+        subclasses  = { HORDE.Class_Ghost },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Engineer,
-        "Has access to special weapons and equipment.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "engineer_base",
-        {
-            [1] = {title = "Craftsmanship", choices = {"engineer_tinkerer", "engineer_pioneer"}},
-            [2] = {title = "Core", choices = {"engineer_fusion", "engineer_metabolism"}},
-            [3] = {title = "Manipulation", choices = {"engineer_antimatter_shield", "engineer_displacer"}},
-            [4] = {title = "Experimental", choices = {"engineer_symbiosis", "engineer_kamikaze"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Engineer,
+        description = "Has access to special weapons and equipment.",
+        base_perk   = "engineer_base",
+        perks = {
+            [1] = { title = "Craftsmanship", choices = { "engineer_tinkerer",         "engineer_pioneer"   } },
+            [2] = { title = "Core",          choices = { "engineer_fusion",            "engineer_metabolism"} },
+            [3] = { title = "Manipulation",  choices = { "engineer_antimatter_shield", "engineer_displacer" } },
+            [4] = { title = "Experimental",  choices = { "engineer_symbiosis",         "engineer_kamikaze"  } },
         },
-        6,nil,nil,nil,
-        {HORDE.Class_Engineer}
-    )
+        order       = 6,
+        subclasses  = { HORDE.Class_Engineer },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Berserker,
-        "Has access to melee weapons and some ranged equipment.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "berserker_base",
-        {
-            [1] = {title = "Fundamentals", choices = {"berserker_breathing_technique", "berserker_bloodlust"}},
-            [2] = {title = "Technique", choices = {"berserker_bushido", "berserker_savagery"}},
-            [3] = {title = "Parry", choices = {"berserker_graceful_guard", "berserker_unwavering_guard"}},
-            [4] = {title = "Combat Arts", choices = {"berserker_phalanx", "berserker_rip_and_tear"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Berserker,
+        description = "Has access to melee weapons and some ranged equipment.",
+        base_perk   = "berserker_base",
+        perks = {
+            [1] = { title = "Fundamentals", choices = { "berserker_breathing_technique", "berserker_bloodlust"      } },
+            [2] = { title = "Technique",    choices = { "berserker_bushido",              "berserker_savagery"       } },
+            [3] = { title = "Parry",        choices = { "berserker_graceful_guard",       "berserker_unwavering_guard"} },
+            [4] = { title = "Combat Arts",  choices = { "berserker_phalanx",              "berserker_rip_and_tear"   } },
         },
-        7,nil,nil,nil,
-        {HORDE.Class_Berserker}
-    )
+        order       = 7,
+        subclasses  = { HORDE.Class_Berserker },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Warden,
-        "Has full access to shotguns and watchtowers (horde_watchtower).",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "warden_base",
-        {
-            [1] = {title = "Sustain", choices = {"warden_bulwark", "warden_vitality"}},
-            [2] = {title = "Resource Utilization", choices = {"warden_restock", "warden_inoculation"}},
-            [3] = {title = "Escort", choices = {"warden_rejection_pulse", "warden_energize"}},
-            [4] = {title = "Coverage", choices = {"warden_ex_machina", "warden_resonance_cascade"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Warden,
+        description = "Has full access to shotguns and watchtowers (horde_watchtower).",
+        base_perk   = "warden_base",
+        perks = {
+            [1] = { title = "Sustain",               choices = { "warden_bulwark",          "warden_vitality"          } },
+            [2] = { title = "Resource Utilization",  choices = { "warden_restock",           "warden_inoculation"       } },
+            [3] = { title = "Escort",                choices = { "warden_rejection_pulse",   "warden_energize"          } },
+            [4] = { title = "Coverage",              choices = { "warden_ex_machina",        "warden_resonance_cascade" } },
         },
-        8,nil,nil,nil,
-        {HORDE.Class_Warden}
-    )
+        order       = 8,
+        subclasses  = { HORDE.Class_Warden },
+    })
 
-    HORDE:CreateClass(
-        HORDE.Class_Cremator,
-        "Has access to heat-based weaponry.",
-        100,
-        GetConVar("horde_base_walkspeed"):GetInt(),
-        GetConVar("horde_base_runspeed"):GetInt(),
-        "cremator_base",
-        {
-            [1] = {title = "Chemicals", choices = {"cremator_methane", "cremator_napalm"}},
-            [2] = {title = "Energy Absorption", choices = {"cremator_positron_array", "cremator_entropy_shield"}},
-            [3] = {title = "Heat Manipulation", choices = {"cremator_hyperthermia", "cremator_ionization"}},
-            [4] = {title = "Energy Discharge", choices = {"cremator_firestorm", "cremator_incineration"}},
+    HORDE:CreateClass({
+        name        = HORDE.Class_Cremator,
+        description = "Has access to heat-based weaponry.",
+        base_perk   = "cremator_base",
+        perks = {
+            [1] = { title = "Chemicals",       choices = { "cremator_methane",         "cremator_napalm"       } },
+            [2] = { title = "Energy Absorption",choices = { "cremator_positron_array",  "cremator_entropy_shield"} },
+            [3] = { title = "Heat Manipulation",choices = { "cremator_hyperthermia",    "cremator_ionization"   } },
+            [4] = { title = "Energy Discharge", choices = { "cremator_firestorm",       "cremator_incineration" } },
         },
-        9,nil,nil,nil,
-        {HORDE.Class_Cremator}
-    )
+        order       = 9,
+        subclasses  = { HORDE.Class_Cremator },
+    })
 end
 
 if SERVER then
@@ -347,42 +351,39 @@ if CLIENT then
 end
 
 HORDE.subclasses = {}
+
+-- ─────────────────────────────────────────────────────────────
+-- Helper class mapping tables.
+-- Populated automatically via CreateClass — no need to
+-- duplicate data manually.
+-- ─────────────────────────────────────────────────────────────
 HORDE.classes_to_subclasses = {
-    [HORDE.Class_Survivor] = {HORDE.Class_Survivor},
-    [HORDE.Class_Assault] = {HORDE.Class_Assault},
-    [HORDE.Class_Medic] = {HORDE.Class_Medic},
-    [HORDE.Class_Heavy] = {HORDE.Class_Heavy},
-    [HORDE.Class_Demolition] = {HORDE.Class_Demolition},
-    [HORDE.Class_Cremator] = {HORDE.Class_Cremator},
-    [HORDE.Class_Ghost] = {HORDE.Class_Ghost},
-    [HORDE.Class_Warden] = {HORDE.Class_Warden},
-    [HORDE.Class_Berserker] = {HORDE.Class_Berserker},
-    [HORDE.Class_Engineer] = {HORDE.Class_Engineer},
+    [HORDE.Class_Survivor]   = { HORDE.Class_Survivor   },
+    [HORDE.Class_Assault]    = { HORDE.Class_Assault     },
+    [HORDE.Class_Medic]      = { HORDE.Class_Medic       },
+    [HORDE.Class_Heavy]      = { HORDE.Class_Heavy       },
+    [HORDE.Class_Demolition] = { HORDE.Class_Demolition  },
+    [HORDE.Class_Cremator]   = { HORDE.Class_Cremator    },
+    [HORDE.Class_Ghost]      = { HORDE.Class_Ghost       },
+    [HORDE.Class_Warden]     = { HORDE.Class_Warden      },
+    [HORDE.Class_Berserker]  = { HORDE.Class_Berserker   },
+    [HORDE.Class_Engineer]   = { HORDE.Class_Engineer    },
 }
-HORDE.classes_to_order = {
-    [HORDE.Class_Survivor] = 0,
-    [HORDE.Class_Assault] = 1,
-    [HORDE.Class_Heavy] = 2,
-    [HORDE.Class_Medic] = 3,
-    [HORDE.Class_Demolition] = 4,
-    [HORDE.Class_Ghost] = 5,
-    [HORDE.Class_Engineer] = 6,
-    [HORDE.Class_Berserker] = 7,
-    [HORDE.Class_Warden] = 8,
-    [HORDE.Class_Cremator] = 9,
-}
-HORDE.order_to_class_name = {
-    [0] = HORDE.Class_Survivor,
-    [1] = HORDE.Class_Assault,
-    [2] = HORDE.Class_Heavy,
-    [3] = HORDE.Class_Medic,
-    [4] = HORDE.Class_Demolition,
-    [5] = HORDE.Class_Ghost,
-    [6] = HORDE.Class_Engineer,
-    [7] = HORDE.Class_Berserker,
-    [8] = HORDE.Class_Warden,
-    [9] = HORDE.Class_Cremator,
-}
+
+-- classes_to_order and order_to_class_name are derived from classes[].order,
+-- so storing them separately is redundant. Kept for backwards compatibility,
+-- but are populated automatically via CreateClass.
+HORDE.classes_to_order = {}
+-- order_to_class_name is declared above and populated inside CreateClass.
+
+-- Hook after default classes load: sync the duplicate lookup tables.
+hook.Add("Horde_AllModulesLoaded", "Horde_SyncClassOrderTables", function()
+    for name, class in pairs(HORDE.classes) do
+        HORDE.classes_to_order[name] = class.order
+        HORDE.order_to_class_name[class.order] = name
+    end
+end)
+
 HORDE.subclass_name_to_crc = {}
 HORDE.subclasses_to_classes = {}
 HORDE.order_to_subclass_name = {}
@@ -563,7 +564,6 @@ function plymeta:Horde_GetSubclassUnlocked(subclass)
     if not self.Horde_subclasses_unlocked then self.Horde_subclasses_unlocked = {} end
     if not HORDE.subclasses[subclass].ParentClass then return true end
     return self.Horde_subclasses_unlocked[subclass] == true
-    --return self.Horde_subclasses_unlocked[subclass] == true
 end
 
 function plymeta:Horde_GetCurrentSubclass()
@@ -597,8 +597,14 @@ function HORDE:LoadSubclassChoices()
         while not f:EndOfFile() do
             local class_order = f:ReadULong()
             local subclass_order = f:ReadULong()
-            MySelf.Horde_subclass_choices[HORDE.order_to_class_name[class_order]] = HORDE.order_to_subclass_name[tostring(subclass_order)]
-            MySelf.Horde_subclasses[HORDE.order_to_class_name[class_order]] = HORDE.order_to_subclass_name[tostring(subclass_order)]
+            local class_name    = HORDE.order_to_class_name[class_order]
+            local subclass_name = HORDE.order_to_subclass_name[tostring(subclass_order)]
+            -- Skip entries whose order values are not yet known (e.g. classes
+            -- haven't synced from server yet, or the save is from an older version).
+            if class_name and subclass_name then
+                MySelf.Horde_subclass_choices[class_name] = subclass_name
+                MySelf.Horde_subclasses[class_name]       = subclass_name
+            end
         end
         f:Close()
 
@@ -622,10 +628,6 @@ hook.Add("InitPostEntity", "Horde_PlayerInit", function()
                 class = HORDE.Class_Survivor
             end
             local f2 = file.Read("horde/class_choices.txt", "DATA")
-	    -- I Seriously don't understand what it's supposed to do.
-            --[[if HORDE.subclasses_to_classes[f2] then
-                f2 = HORDE.subclasses_to_classes[f2]
-            end]]--
 
             if f2 then
                 HORDE:SendSavedPerkChoices(f2)
