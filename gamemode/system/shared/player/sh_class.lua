@@ -51,8 +51,10 @@ function HORDE:CreateClass(data)
     class.model         = data.model     or nil
     class.icon          = data.icon      or (data.name .. ".png")
     class.infusions     = data.infusions or {}
-    class.subclasses    = data.subclasses or { data.name }
-
+	-- The class itself is always its first subclass (the free default)
+	-- Paid subclasses (e.g. SpecOps, Psycho) are appended later by Horde_LoadSubclasses()
+	class.subclasses    = data.subclasses or { data.name } 
+	
     HORDE.order_to_class_name[class.order] = class.name
     HORDE.classes[class.name] = class
 end
